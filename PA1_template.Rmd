@@ -26,6 +26,9 @@ First, we must load the data, unzipping it first from the zip file:
 
 ```{r loaddata, cache=TRUE}
 df <- read.csv(unz("activity.zip","activity.csv"), colClasses=c('integer','Date','integer'))
+# Add a 'continuous' interval using decimal hours for better presentation on some graphs
+interval_to_hour <- function(i) i %/% 100 + (i %% 100) / 60 
+df$hour <- interval_to_hour(df$interval)
 str(df) # Show structure
 summary(df) # And summary stats for each column
 # Now compute data set with NAs removed
@@ -75,16 +78,44 @@ abline(v=mean(df.daily$steps, na.rm = TRUE),col='red')
 abline(v=median(df.daily$steps, na.rm = TRUE),col='blue')
 ```
 
-## What is the average daily activity pattern?
+## (Additional) What is the overall trend over time?
 
-Now calculate our intra-day summaries and plot:
+Overall trend over time:
+
+```{r overtime}
+library(ggplot2)
+plot.data=aggregate(steps ~ date, data=df.na.rm, FUN='mean')
+qplot(x=date, y=steps, 
+      data=plot.data, 
+      geom='point',
+      main="Avg Steps each day") +
+  geom_smooth(method='lm',se=FALSE)
+```
+
+No real trend here.
+
+Overall trend over time, coloured by day of week:
+
+```{r overtime.by.day}
+qplot(x=date, y=steps, 
+      data=plot.data, 
+      colour=weekdays(date), 
+      geom='point',
+      main="Avg Steps each day") +
+  geom_smooth(method='lm',se=FALSE)
+```
+
+## What is the average daily activity pattern?
 
 ```{r intraday}
 df.intra.day.average <- aggregate(steps ~ interval, data = df.na.rm, FUN=mean) # Summarised by interval
-modal.interval <- with(df.intra.day.average, interval[which.max(steps)])
+df.intra.day.average$hour <- interval_to_hour(df.intra.day.average$interval)
+modal.pos <- which.max(df.intra.day.average$steps)
+modal.hour <- df.intra.day.average$hour[modal.pos]
+modal.interval <- df.intra.day.average$interval[modal.pos]
 with(df.intra.day.average, {
-  plot(x = interval, y=steps, type='l', main="Average Steps per Time Interval")
-  abline(v=modal.interval,col='red')
+  plot(x=hour, y=steps, type='l', main="Average Steps per Time Interval", xlab='Interval')
+  abline(v=modal.hour,col='red')
 })
 ```
 
@@ -92,24 +123,54 @@ The mode of the intra-day averages, indicating the 5-minute window with the maxi
 
 ## Imputing missing values
 
-First, let us create a data set denoting _just_ the missing values, and see how many we have in total.
+### Establishing the shape of the missing values
+
+Now calculate our intra-day summaries and plot:
+
+First, let us create a data set denoting _just_ the missing values.
+
 
 ```{r missings}
 df.missing <- df[is.na(df$steps),-1]
-nrow(df.missing)
-aggregate(interval ~ date, data = df.missing, FUN='length')
+num.missing <- nrow(df.missing)
 ```
 
-Then we then check how many values are missing for each date.
+This shows us that there are `r num.missing` missing data points.
+Next, see how many we have in total, and see if their is any discernable 'shape' to it.
+
+```{r missings_plot}
+library(ggplot2)
+qplot(x=date, y=hour, data=df.missing, stat='identity', alpha=I(0.3), main="Scatter of missing values by date x interval") +
+  scale_y_continuous(breaks=seq(0,24,by=3))
+```
+
+The plot suggests strongly that we have many missing values on a few specific days.
+So we further summarise the missing into their day-groups to check the extent of this hypothesis.
+(And add in the weekdays to see if that may also be a contributing factor.)
 
 ```{r missings.daily}
 df.missing.by.day <- aggregate(interval ~ date, data = df.missing, FUN='length')
-library(lubridate)
-df.missing.by.day$wday <- wday(df.missing.by.day$date,label=TRUE)
+df.missing.by.day$weekday <- weekdays(df.missing.by.day$date,TRUE)
 df.missing.by.day
 ```
 
-We discover that the NAs actually apply to the whole of the day in which NAs occur.  That is, 
-for a given day, we either have complete data or no data.
+We discover that the NAs actually apply to the whole of the day in which NAs occur
+(there are 288 5-minute slices in 24-hours).  
+That is, for a given day, we either have complete data or no data.
+
+### Mechanisms for Imputing
+
+The first obvious method of imputing would be to simply take the average for the interval across all days and use that
+to impute the missing values identified above.  However, we already have a concern that there may be a systemic bias according to
+the day of the week, and there may be a systemic up-ward or down-ward trend in the data that we have not yet determined.
+
+We need to examine the data by date and by weekday to determine if our strategy is valid.
+
+```{r impute.plot.1}
+qplot(data=df[df$steps > 0,], x=hour, y=steps, colour=weekdays(date), alpha=I(0.7))
+```
+```{r impute.plot.2}
+qplot(data=df[df$steps > 0,], x=date, y=hour, size=steps, colour=weekdays(date), alpha=I(0.5))
+```
 
 ## Are there differences in activity patterns between weekdays and weekends?
