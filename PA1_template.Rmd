@@ -1,25 +1,102 @@
 ---
 title: "Reproducible Research: Peer Assessment 1"
+author: "Derek Slone-Zhen"
+date: "14th October 2014"
 output: 
   html_document:
     keep_md: true
 ---
 
-
 ## Loading and preprocessing the data
 
+The Activity monitoring data for this assignement is available directly at https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip and is also available withing [this git repositorty](https://github.com/dereksz/RepData_PeerAssessment1).
 
+The variables included in this dataset are:
+
+* **steps**: Number of steps taking in a 5-minute interval (missing
+    values are coded as `NA`)
+
+* **date**: The date on which the measurement was taken in YYYY-MM-DD
+    format
+
+* **interval**: Identifier for the 5-minute interval in which
+    measurement was taken
+
+First, we must load the data, unzipping it first from the zip file:
+
+```{r loaddata, cache=TRUE}
+df <- read.csv(unz("activity.zip","activity.csv"), colClasses=c('integer','Date','integer'))
+str(df) # Show structure
+summary(df) # And summary stats for each column
+# Now compute data set with NAs removed
+df.na.rm <- df[!is.na(df$steps),] # df with NA steps removed
+```
 
 ## What is mean total number of steps taken per day?
 
+First, we calculate our daily summaries:
 
+```{r daily}
+df.daily <- aggregate(steps ~ date, data = df.na.rm, FUN=sum) # Summarised down to daily level
+```
+
+Plotting this, we can see a roughly normal distribution of the daily number of steps in the following histogram: 
+
+```{r hist1}
+g <- df.daily$steps
+h <- hist(g, xlab='Steps', main="Histogram of Steps per Day",breaks=10)
+# The normal fit is thank to http://stackoverflow.com/questions/20078107/overlay-normal-curve-to-histogram-in-r
+xfit <- seq(min(g),max(g),length=100)
+yfit <- dnorm(xfit,mean=mean(g),sd=sd(g)) 
+multiplier <- h$counts / h$density
+lines(xfit, yfit*multiplier[1], col="red", lwd=2)
+```
+
+Ignoring missing values, the mean number of steps taken per day, is `r mean(df.daily$steps)`, 
+and the median number of steps taken per day is `r median(df.daily$steps)`.
+These can be calculated individually as:
+
+```{r mean_median}
+mean(df.daily$steps)
+median(df.daily$steps)
+```
+
+Or in combination using the `summary` function:
+
+```{r nna_summary}
+summary(df.daily$steps)
+```
+Finally, we can add these to our original plot, although the two values are so close you may not be able to 
+differentiate the lines!
+
+```{r hist2}
+hist(g, xlab='Steps', main="Histogram of Steps per Day",breaks=10)
+abline(v=mean(df.daily$steps, na.rm = TRUE),col='red')
+abline(v=median(df.daily$steps, na.rm = TRUE),col='blue')
+```
 
 ## What is the average daily activity pattern?
 
+Now calculate our intra-day summaries and plot:
 
+```{r intraday}
+df.intra.day.average <- aggregate(steps ~ interval, data = df.na.rm, FUN=mean) # Summarised by interval
+modal.interval <- with(df.intra.day.average, interval[which.max(steps)])
+with(df.intra.day.average, {
+  plot(x = interval, y=steps, type='l', main="Average Steps per Time Interval")
+  abline(v=modal.interval,col='red')
+})
+```
+
+The mode of the intra-day averages, indicating the 5-minute window with the maximum average number of steps, is `r modal.interval`, that is [08:35 ... 08:40) - that's probably everyone walking to work!
 
 ## Imputing missing values
 
+First, let us create a data set denoting _just_ the missing values:
 
+```{r missings}
+df.missing <- df[is.na(df$steps),-1]
+xtab <- table(df.missing)
+```
 
 ## Are there differences in activity patterns between weekdays and weekends?
