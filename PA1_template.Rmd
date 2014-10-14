@@ -92,11 +92,24 @@ The mode of the intra-day averages, indicating the 5-minute window with the maxi
 
 ## Imputing missing values
 
-First, let us create a data set denoting _just_ the missing values:
+First, let us create a data set denoting _just_ the missing values, and see how many we have in total.
 
 ```{r missings}
 df.missing <- df[is.na(df$steps),-1]
-xtab <- table(df.missing)
+nrow(df.missing)
+aggregate(interval ~ date, data = df.missing, FUN='length')
 ```
+
+Then we then check how many values are missing for each date.
+
+```{r missings.daily}
+df.missing.by.day <- aggregate(interval ~ date, data = df.missing, FUN='length')
+library(lubridate)
+df.missing.by.day$wday <- wday(df.missing.by.day$date,label=TRUE)
+df.missing.by.day
+```
+
+We discover that the NAs actually apply to the whole of the day in which NAs occur.  That is, 
+for a given day, we either have complete data or no data.
 
 ## Are there differences in activity patterns between weekdays and weekends?
