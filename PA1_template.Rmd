@@ -9,7 +9,7 @@ output:
 
 ## Loading and preprocessing the data
 
-The Activity monitoring data for this assignement is available directly at https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip and is also available withing [this git repositorty](https://github.com/dereksz/RepData_PeerAssessment1).
+The Activity monitoring data for this assignement is available directly at https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip and is also available within [this git repositorty](https://github.com/dereksz/RepData_PeerAssessment1).
 
 The variables included in this dataset are:
 
@@ -22,32 +22,68 @@ The variables included in this dataset are:
 * **interval**: Identifier for the 5-minute interval in which
     measurement was taken
 
-First, we must load the data, unzipping it first from the zip file:
+First, we load the libraries that we are dependant on.  If this fails, please install these packages 
+from [CRAN](http://cran.r-project.org/).
+
+```{r preabmble}
+library(lubridate)
+library(ggplot2)
+```
+
+Then we must load the data, unzipping it first from the zip file.
+
+We also add an "hour" column that holds a decimal version of the interval.  The `interval` is 
+encoded as HHMM packed into an integer.  This results in a "gap" in the tnteger sequence between
+[HH]55 and [HH+1]00, which disturbes the graphing when using the interval as a "continueous" variable
+(as opposed to discrete).
+
+We also add `Day.Of.Week` and `weekend` fields using 
+[lubridate](http://cran.r-project.org/web/packages/lubridate/index.html).
+(This is more useful than the [weekday](http://www.inside-r.org/r-doc/base/months) in base `R`, as
+is produces ordered factors for the weekdays rather then plain characters; this then determines
+ordering in graph ledgends and the like in a way that is sympathetic with human expectation.)
+
+Finaly, we create a subsetted version of the data frame with missing values removed.
 
 ```{r loaddata, cache=TRUE}
 df <- read.csv(unz("activity.zip","activity.csv"), colClasses=c('integer','Date','integer'))
 # Add a 'continuous' interval using decimal hours for better presentation on some graphs
 interval_to_hour <- function(i) i %/% 100 + (i %% 100) / 60 
 df$hour <- interval_to_hour(df$interval)
-str(df) # Show structure
-summary(df) # And summary stats for each column
+df$Day.Of.Week = wday(df$date, label = TRUE, abbr = TRUE)
+# The 'labels' are the correct way around, because factor will order TRUE and FALSE alphabetically
+as.weekday.end <- function(date) factor(wday(date) %in% c(1,7),labels=c('Weekday','Weekend'))
+df$weekend <- as.weekday.end(df$date)
 # Now compute data set with NAs removed
-df.na.rm <- df[!is.na(df$steps),] # df with NA steps removed
+df.na.rm <- df[!is.na(df$steps),]
 ```
 
 ## What is mean total number of steps taken per day?
 
-First, we calculate our daily summaries:
+First, we calculate our daily summaries from our data frame with missing values removed:
 
 ```{r daily}
 df.daily <- aggregate(steps ~ date, data = df.na.rm, FUN=sum) # Summarised down to daily level
+df.daily$Day.Of.Week <-wday(df.daily$date, label = TRUE, abbr = TRUE)
 ```
 
-Plotting this, we can see a roughly normal distribution of the daily number of steps in the following histogram: 
+Ignoring missing values, the mean and median number of steps taken per day can be calculated as:
+ 
+```{r mean_median}
+mean(df.daily$steps)
+median(df.daily$steps)
+```
 
-```{r hist1}
+Plotting this, we can see a roughly normal distribution of the daily number of steps in the following histogram,
+with the mean added in red, and the median added in blue
+(although they are so close together it is actually hard to distinguish the two - 
+you will probably percieve this as a single purple line):
+
+```{r hist, cache=TRUE}
 g <- df.daily$steps
 h <- hist(g, xlab='Steps', main="Histogram of Steps per Day",breaks=10)
+abline(v=mean(g),col='red')
+abline(v=median(g),col='blue')
 # The normal fit is thank to http://stackoverflow.com/questions/20078107/overlay-normal-curve-to-histogram-in-r
 xfit <- seq(min(g),max(g),length=100)
 yfit <- dnorm(xfit,mean=mean(g),sd=sd(g)) 
@@ -55,92 +91,94 @@ multiplier <- h$counts / h$density
 lines(xfit, yfit*multiplier[1], col="red", lwd=2)
 ```
 
-Ignoring missing values, the mean number of steps taken per day, is `r mean(df.daily$steps)`, 
-and the median number of steps taken per day is `r median(df.daily$steps)`.
-These can be calculated individually as:
-
-```{r mean_median}
-mean(df.daily$steps)
-median(df.daily$steps)
-```
-
-Or in combination using the `summary` function:
-
-```{r nna_summary}
-summary(df.daily$steps)
-```
-Finally, we can add these to our original plot, although the two values are so close you may not be able to 
-differentiate the lines!
-
-```{r hist2}
-hist(g, xlab='Steps', main="Histogram of Steps per Day",breaks=10)
-abline(v=mean(df.daily$steps, na.rm = TRUE),col='red')
-abline(v=median(df.daily$steps, na.rm = TRUE),col='blue')
-```
-
 ## (Additional) What is the overall trend over time?
 
-Overall trend over time:
+Aggregating our data into days, the overall trend over time is:
 
-```{r overtime}
-library(ggplot2)
-plot.data=aggregate(steps ~ date, data=df.na.rm, FUN='mean')
-qplot(x=date, y=steps, 
-      data=plot.data, 
+```{r summary.by.day}
+df.by.day.sum <- aggregate(steps ~ date, data=df.na.rm, FUN='sum')
+df.by.day.sum$Day.Of.Week <-wday(df.by.day.sum$date, label = TRUE, abbr = TRUE)
+
+qplot(x=date, y=steps, data=df.by.day.sum,
       geom='point',
-      main="Avg Steps each day") +
-  geom_smooth(method='lm',se=FALSE)
+      main="Total Steps Each Day") +
+  geom_smooth(method='lm')
 ```
 
 No real trend here.
 
-Overall trend over time, coloured by day of week:
+The overall trend over time, coloured by day of week:
 
-```{r overtime.by.day}
-qplot(x=date, y=steps, 
-      data=plot.data, 
-      colour=weekdays(date), 
+```{r summary.by.dayofweek}
+qplot(x=date, y=steps, data=df.by.day.sum,
+      colour=Day.Of.Week, 
       geom='point',
-      main="Avg Steps each day") +
+      main="Total Steps Each Day, By Day Of Week") +
   geom_smooth(method='lm',se=FALSE)
 ```
 
+(The error bands on the last plot were so large that they have been dropper for better readability.)
+
 ## What is the average daily activity pattern?
 
+We examine the mean number of steps for each interval across our entire data set, and calculate the mode of that
+data set:
+
 ```{r intraday}
-df.intra.day.average <- aggregate(steps ~ interval, data = df.na.rm, FUN=mean) # Summarised by interval
-df.intra.day.average$hour <- interval_to_hour(df.intra.day.average$interval)
-modal.pos <- which.max(df.intra.day.average$steps)
-modal.hour <- df.intra.day.average$hour[modal.pos]
-modal.interval <- df.intra.day.average$interval[modal.pos]
+df.intra.day.average <- aggregate(steps ~ hour, data = df.na.rm, FUN=mean) # Summarised by steps by interval/hour
+modal.pos <- which.max(df.intra.day.average$steps) # Find which row number holds the maximum value
+modal.hour <- df.intra.day.average$hour[modal.pos] # Extract the hour representation
+modal.interval <- df.intra.day.average$interval[modal.pos] # Extract interval representation
 with(df.intra.day.average, {
   plot(x=hour, y=steps, type='l', main="Average Steps per Time Interval", xlab='Interval')
   abline(v=modal.hour,col='red')
 })
 ```
 
-The mode of the intra-day averages, indicating the 5-minute window with the maximum average number of steps, is `r modal.interval`, that is [08:35 ... 08:40) - that's probably everyone walking to work!
+The mode of the intra-day averages, indicating the 5-minute window with the maximum average number of steps, 
+is `r modal.interval`, that is 08:35 inclusive to 08:40 exclusive - that's probably everyone is walking to work!
+
+## Are there differences in activity patterns between weekdays and weekends?
+
+(I will return to imputing _after_ looking at the weekday / weekend differences, please bear with me!)
+
+We use `qplot`'s built in `stat` and `fun.y` to directly display the graph that shows the mean number of steps 
+per interval, and its built-in faceting to distinguish weekdays from weekends:
+
+```{r weekday.weekends, message=FALSE, cache=TRUE}
+qplot(data=df.na.rm, x=hour, y=steps, facets=weekend ~ ., geom='line', stat='summary', fun.y='mean',
+      main='Average number of steps per interval:\n Weekday versus Weekend') +
+  scale_x_continuous(breaks=seq(0,24,by=3)) +
+  geom_smooth()
+```
+
+Clearly there is quite a difference between these two.  The weekday has a sigificant spike at around the 8:30am mark,
+and is essentially bi- or tri-modal distribution with peaks around getting to work, leaving work, and a minor peek
+around lunchtime.
+The weekend smoothed curve shows a decidedly different profile.
 
 ## Imputing missing values
 
+While the brief suggests we do this as we like, I would like an approach that is more justifiable.  
+We have already shown that the overall number of steps per day across the whole period of the 
+study is reasonabley constant.  We now consider the whereabouts of the missing values, and other
+characteristicts of the data that might impact how we choose our imputed values.
+
 ### Establishing the shape of the missing values
 
-Now calculate our intra-day summaries and plot:
-
 First, let us create a data set denoting _just_ the missing values.
-
 
 ```{r missings}
 df.missing <- df[is.na(df$steps),-1]
 num.missing <- nrow(df.missing)
+num.missing
 ```
 
 This shows us that there are `r num.missing` missing data points.
-Next, see how many we have in total, and see if their is any discernable 'shape' to it.
+Next, see how many we have in total by date and by hour, to see if there is a pattern in these missing values.
 
 ```{r missings_plot}
-library(ggplot2)
-qplot(x=date, y=hour, data=df.missing, stat='identity', alpha=I(0.3), main="Scatter of missing values by date x interval") +
+qplot(x=date, y=hour, data=df.missing, stat='identity', alpha=I(0.3), main="Scatter of missing values by date & interval") +
   scale_y_continuous(breaks=seq(0,24,by=3))
 ```
 
@@ -150,27 +188,44 @@ So we further summarise the missing into their day-groups to check the extent of
 
 ```{r missings.daily}
 df.missing.by.day <- aggregate(interval ~ date, data = df.missing, FUN='length')
-df.missing.by.day$weekday <- weekdays(df.missing.by.day$date,TRUE)
+df.missing.by.day$weekday <- wday(df.missing.by.day$date, label = TRUE, abbr = TRUE)
 df.missing.by.day
 ```
 
 We discover that the NAs actually apply to the whole of the day in which NAs occur
-(there are 288 5-minute slices in 24-hours).  
+(there are `r 24*60/5` 5-minute slices in 24-hours).  
 That is, for a given day, we either have complete data or no data.
 
 ### Mechanisms for Imputing
 
 The first obvious method of imputing would be to simply take the average for the interval across all days and use that
-to impute the missing values identified above.  However, we already have a concern that there may be a systemic bias according to
-the day of the week, and there may be a systemic up-ward or down-ward trend in the data that we have not yet determined.
+to impute the missing values identified above.  However, we have already seen a different pattern between 
+week days and weekends.  We have already shown that there is little systemic up-ward or down-ward trend in the data.
 
-We need to examine the data by date and by weekday to determine if our strategy is valid.
+The follwoing plot tries to show the realtionship between date, interval, and number of steps, by using the size of the 
+'dot' to denote the numer of steps for a given date cross interval, and using colour to distinguish the day of the 
+week.  (We first restrict the plot to observations with a non-zero step value simply to remove the uninformative
+noise around the x-axis.)
 
 ```{r impute.plot.1}
-qplot(data=df[df$steps > 0,], x=hour, y=steps, colour=weekdays(date), alpha=I(0.7))
-```
-```{r impute.plot.2}
-qplot(data=df[df$steps > 0,], x=date, y=hour, size=steps, colour=weekdays(date), alpha=I(0.5))
+qplot(data=df.na.rm[df.na.rm$steps>0,], x=date, y=hour, size=steps, colour=Day.Of.Week, alpha=I(0.5))
 ```
 
-## Are there differences in activity patterns between weekdays and weekends?
+Trying to cast that into a more traditional graphic from which we can read off numerical differences,
+we can display a box and whisker plot of the number os steps each day, by day of week:
+
+```{r impute.plot.2}
+qplot(data=df.daily, x=Day.Of.Week, y=steps, geom='boxplot', main="Steps per day by Day of Week") 
+```
+
+The above plots do seem to indicate a difference in distribution on each day.  Therefore we choose 
+to impute missing values using the average for the interval $\times$ day of week.
+
+See http://www.mail-archive.com/r-help@r-project.org/msg58289.html
+
+```{r impute}
+replacements <- aggregate(steps ~ Day.Of.Week + interval, data=df.na.rm, FUN='mean')
+replacements_mx <- xtabs(steps ~ Day.Of.Week + interval, data=replacements)
+missings <- is.na(df$steps)
+df[missings,'steps'] <- replacements_mx[[df$Day.Of.Week[missings], as.factor(df$interval[missings])]]
+```
