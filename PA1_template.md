@@ -1,17 +1,8 @@
----
-title: "Reproducible Research: Peer Assessment 1"
-author: "Derek Slone-Zhen"
-date: "14th October 2014"
-output: 
-  html_document:
-    keep_md: true
-    base64_images: false
----
+# Reproducible Research: Peer Assessment 1
+Derek Slone-Zhen  
+14th October 2014  
 
-```{r utility, echo=FALSE}
-# From: http://stackoverflow.com/questions/3245862/format-numbers-to-significant-figures-nicely-in-r
-fmt <- function(num) formatC(num,big.mark=',',format='fg',digits=2)
-```
+
 
 ## Loading and preprocessing the data
 
@@ -31,11 +22,11 @@ The variables included in this dataset are:
 First, we load the libraries that we are dependant on.  If this fails, please install these packages 
 from [CRAN](http://cran.r-project.org/).
 
-```{r preabmble, message=FALSE}
+
+```r
 library(lubridate)  # for days of the week as orderred factors
 library(ggplot2)    # the best plotting library? ;-)
 library(plyr)       # helps us do the imputing easily!
-
 ```
 
 Then we must load the data, unzipping it first from the zip file.
@@ -53,7 +44,8 @@ ordering in graph ledgends and the like in a way that is sympathetic with human 
 
 Finaly, we create a subsetted version of the data frame with missing values removed.
 
-```{r loaddata, cache=TRUE}
+
+```r
 df <- read.csv(unz("activity.zip","activity.csv"), colClasses=c('integer','Date','integer'))
 # Add a 'continuous' interval using decimal hours for better presentation on some graphs
 interval_to_hour <- function(i) i %/% 100 + (i %% 100) / 60 
@@ -70,16 +62,29 @@ df.na.rm <- df[!is.na(df$steps),]
 
 First, we calculate our daily summaries from our data frame with missing values removed:
 
-```{r daily}
+
+```r
 df.daily <- aggregate(steps ~ date, data = df.na.rm, FUN=sum) # Summarised down to daily level
 df.daily$Day.Of.Week <-wday(df.daily$date, label = TRUE, abbr = TRUE)
 ```
 
 The mean and median number of steps taken per day can be calculated as:
  
-```{r mean_median}
+
+```r
 mean(df.daily$steps)
+```
+
+```
+## [1] 10766
+```
+
+```r
 median(df.daily$steps)
+```
+
+```
+## [1] 10765
 ```
 
 Plotting this, we can see a roughly normal distribution of the daily number of steps in the following histogram,
@@ -87,7 +92,8 @@ with the mean added in red, and the median added in blue
 (although they are so close together it is actually hard to distinguish the two - 
 you will probably percieve this as a single purple line):
 
-```{r hist}
+
+```r
 g <- df.daily$steps
 h <- hist(g, xlab='Steps', main="Histogram of Steps per Day",breaks=10)
 abline(v=mean(g),col='red')
@@ -99,6 +105,8 @@ multiplier <- h$counts / h$density
 lines(xfit, yfit*multiplier[1], col="red", lwd=2)
 ```
 
+![plot of chunk hist](./PA1_template_files/figure-html/hist.png) 
+
 ## (Additional) What is the overall trend over time?
 
 An analisys of any trending within the data is essential so that our choise of imupting mechanism 
@@ -106,24 +114,30 @@ can be done in a fashion that is ecologically valid.
 
 The overall trend over time is:
 
-```{r summary.by.day}
+
+```r
 qplot(x=date, y=steps, data=df.daily,
       geom='point',
       main="Total Steps Each Day") +
   geom_smooth(method='lm')
 ```
 
+![plot of chunk summary.by.day](./PA1_template_files/figure-html/summary.by.day.png) 
+
 No real trend here.
 
 The overall trend over time, coloured by day of week:
 
-```{r summary.by.dayofweek}
+
+```r
 qplot(x=date, y=steps, data=df.daily,
       colour=Day.Of.Week, 
       geom='point',
       main="Total Steps Each Day, By Day Of Week") +
   geom_smooth(method='lm',se=FALSE)
 ```
+
+![plot of chunk summary.by.dayofweek](./PA1_template_files/figure-html/summary.by.dayofweek.png) 
 
 (The error bands on the last plot were so large that they have been dropper for better readability.)
 
@@ -132,7 +146,8 @@ qplot(x=date, y=steps, data=df.daily,
 We examine the mean number of steps for each interval across our entire data set, and calculate the mode of that
 data set:
 
-```{r intraday}
+
+```r
 df.intra.day.average <- aggregate(steps ~ hour + interval, data = df.na.rm, FUN=mean) # Summarised by steps by interval/hour
 modal.pos <- which.max(df.intra.day.average$steps) # Find which row number holds the maximum value
 modal.hour <- df.intra.day.average$hour[modal.pos] # Extract the hour representation
@@ -147,8 +162,10 @@ qplot(data=df.na.rm, x=hour, y=steps
   geom_vline(xintercept=modal.hour,colour='red',linetype = "dotted")
 ```
 
+![plot of chunk intraday](./PA1_template_files/figure-html/intraday.png) 
+
 The mode of the intra-day averages, indicating the 5-minute window with the maximum average number of steps, 
-is `r modal.interval`, that is 08:35 inclusive to 08:40 exclusive - that's probably everyone is walking to work!
+is 835, that is 08:35 inclusive to 08:40 exclusive - that's probably everyone is walking to work!
 
 ## Are there differences in activity patterns between weekdays and weekends?
 
@@ -157,12 +174,15 @@ is `r modal.interval`, that is 08:35 inclusive to 08:40 exclusive - that's proba
 We use `qplot`'s built in `stat` and `fun.y` to directly display the graph that shows the mean number of steps 
 per interval, and its built-in faceting to distinguish weekdays from weekends:
 
-```{r weekday.weekends, message=FALSE}
+
+```r
 qplot(data=df.na.rm, x=hour, y=steps, facets=weekend ~ ., geom='line', stat='summary', fun.y='mean',
       main='Average number of steps per interval:\n Weekday versus Weekend') +
   scale_x_continuous(breaks=seq(0,24,by=3)) +
   geom_smooth()
 ```
+
+![plot of chunk weekday.weekends](./PA1_template_files/figure-html/weekday.weekends.png) 
 
 Clearly there is quite a difference between these two.  The weekday has a sigificant spike at around the 8:30am mark,
 and is essentially bi- or tri-modal distribution with peaks around getting to work, leaving work, and a minor peek
@@ -180,32 +200,53 @@ characteristicts of the data that might impact how we choose our imputed values.
 
 First, let us create a data set denoting _just_ the missing values.
 
-```{r missings}
+
+```r
 df.missing <- df[is.na(df$steps),-1]
 num.missing <- nrow(df.missing)
 num.missing
 ```
 
-This shows us that there are `r num.missing` missing data points.
+```
+## [1] 2304
+```
+
+This shows us that there are 2304 missing data points.
 Next, see how many we have in total by date and by hour, to see if there is a pattern in these missing values.
 
-```{r missings_plot}
+
+```r
 qplot(x=date, y=hour, data=df.missing, stat='identity', alpha=I(0.3), main="Scatter of missing values by date & interval") +
   scale_y_continuous(breaks=seq(0,24,by=3))
 ```
+
+![plot of chunk missings_plot](./PA1_template_files/figure-html/missings_plot.png) 
 
 The plot suggests strongly that we have many missing values on a few specific days.
 So we further summarise the missing into their day-groups to check the extent of this hypothesis.
 (And add in the weekdays to see if that may also be a contributing factor.)
 
-```{r missings.daily}
+
+```r
 df.missing.by.day <- aggregate(interval ~ date, data = df.missing, FUN='length')
 df.missing.by.day$weekday <- wday(df.missing.by.day$date, label = TRUE, abbr = TRUE)
 df.missing.by.day
 ```
 
+```
+##         date interval weekday
+## 1 2012-10-01      288     Mon
+## 2 2012-10-08      288     Mon
+## 3 2012-11-01      288   Thurs
+## 4 2012-11-04      288     Sun
+## 5 2012-11-09      288     Fri
+## 6 2012-11-10      288     Sat
+## 7 2012-11-14      288     Wed
+## 8 2012-11-30      288     Fri
+```
+
 We discover that the NAs actually apply to the whole of the day in which NAs occur
-(there are `r 24*60/5` 5-minute slices in 24-hours).  
+(there are 288 5-minute slices in 24-hours).  
 That is, for a given day, we either have complete data or no data.
 
 ### Mechanisms for Imputing
@@ -219,21 +260,28 @@ The follwoing plot tries to show the realtionship between date, interval, and nu
 week.  (We first restrict the plot to observations with a non-zero step value simply to remove the uninformative
 noise around the x-axis.)
 
-```{r impute.plot.1}
+
+```r
 qplot(data=df.na.rm[df.na.rm$steps>0,], x=date, y=hour, size=steps, colour=Day.Of.Week, alpha=I(0.5))
 ```
+
+![plot of chunk impute.plot.1](./PA1_template_files/figure-html/impute.plot.1.png) 
 
 Trying to cast that into a more traditional graphic from which we can read off numerical differences,
 we can display a box and whisker plot of the number os steps each day, by day of week:
 
-```{r impute.plot.2}
+
+```r
 qplot(data=df.daily, x=Day.Of.Week, y=steps, geom='boxplot', main="Steps per day by Day of Week") 
 ```
+
+![plot of chunk impute.plot.2](./PA1_template_files/figure-html/impute.plot.2.png) 
 
 The above plots do seem to indicate a difference in distribution on each day.  Therefore we choose 
 to impute missing values using the average for the interval and day of week.
 
-```{r impute}
+
+```r
 # From a pattern at http://www.mail-archive.com/r-help@r-project.org/msg58289.html
 impute.mean <- function(x) replace(x, is.na(x), mean(x, na.rm = TRUE))
 df2 <- ddply(df, .(Day.Of.Week, interval), transform, steps = impute.mean(steps))
@@ -243,11 +291,26 @@ df2 <- ddply(df, .(Day.Of.Week, interval), transform, steps = impute.mean(steps)
 
 Repeating our earlier steps to generate a step histogram:
 
-```{r imputed}
+
+```r
 df2.daily <- aggregate(steps ~ date, data = df2, FUN=sum) # Summarised down to daily level
 df2.daily$Day.Of.Week <-wday(df2.daily$date, label = TRUE, abbr = TRUE)
 mean(df2.daily$steps)
+```
+
+```
+## [1] 10821
+```
+
+```r
 median(df2.daily$steps)
+```
+
+```
+## [1] 11015
+```
+
+```r
 g <- df2.daily$steps
 h <- hist(g, xlab='Steps', main="Histogram of Steps per Day",breaks=10)
 abline(v=mean(g),col='red')
@@ -259,10 +322,12 @@ multiplier <- h$counts / h$density
 lines(xfit, yfit*multiplier[1], col="red", lwd=2)
 ```
 
-This shows the mean to have a slight uplift, (now `r fmt(mean(df2.daily$steps))` 
-versus an original `r fmt(mean(df.daily$steps))`, 
-a `r fmt(100*(mean(df2.daily$steps) / mean(df.daily$steps) - 1))`% uplift), 
-but shows an uplift in the median (now being `r fmt(median(df2.daily$steps))` 
-rather than `r fmt(median(df.daily$steps))`, a 
-`r fmt(100*(median(df2.daily$steps) / median(df.daily$steps)-1))`% uplift).
+![plot of chunk imputed](./PA1_template_files/figure-html/imputed.png) 
+
+This shows the mean to have a slight uplift, (now 10,821 
+versus an original 10,766, 
+a 0.51% uplift), 
+but shows an uplift in the median (now being 11,015 
+rather than 10,765, a 
+2.3% uplift).
 
